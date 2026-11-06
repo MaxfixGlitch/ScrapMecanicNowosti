@@ -79,7 +79,7 @@ def http_get(url, timeout=40, retries=3, data=None):
             last = exc
             if DEBUG:
                 log("HTTP fail", attempt + 1, url[:120], exc)
-            time.sleep(2 + attempt * 3)
+            time.sleep(1 + attempt * 2)
     raise last
 
 
@@ -343,21 +343,58 @@ PROVIDERS = [
 ]
 
 
+DEAD_PROVIDERS = set()
+PROVIDER_FAILS = {}
+TIME_BUDGET = int(os.environ.get("SM_TIME_BUDGET", "900"))
+_START = time.time()
+
+
+def translation_available():
+    """Есть ли ещё живой провайдер и не вышли ли мы за лимит времени."""
+    if time.time() - _START > TIME_BUDGET:
+        return False
+    return any(name not in DEAD_PROVIDERS for name, _, _ in PROVIDERS)
+
+
+def _argos_translate(text: str) -> str:
+    """Офлайн-перевод через Argos Translate (включается флагом SM_USE_ARGOS=1)."""
+    global _ARGOS
+    if "_ARGOS" not in globals() or not globals().get("_ARGOS"):
+        import argostranslate.package
+        import argostranslate.translate
+        argostranslate.package.update_package_index()
+        pkgs = argostranslate.package.get_available_packages()
+        pkg = next(p for p in pkgs if p.from_code == "en" and p.to_code == "ru")
+        argostranslate.package.install_from_path(pkg.download())
+        globals()["_ARGOS"] = argostranslate.translate
+    return globals()["_ARGOS"].translate(text, "en", "ru")
+
+if os.environ.get("SM_USE_ARGOS") == "1":
+    PROVIDERS.append(("argos", _argos_translate, 20000))
+
+
 def translate_block(text: str):
     """Переводит один блок текста. Возвращает (результат, провайдер) или (None, None)."""
     text = text.strip()
     if not text or len(text) < 2:
         return text, "none"
     for name, fn, max_len in PROVIDERS:
+        if name in DEAD_PROVIDERS:
+            continue
         if len(text) > max_len:
             continue
         try:
             out = fn(text)
         except Exception as exc:  # noqa: BLE001
+            PROVIDER_FAILS[name] = PROVIDER_FAILS.get(name, 0) + 1
             if DEBUG:
-                log("provider %s failed: %s" % (name, exc))
+                log("провайдер %s ошибся: %s" % (name, exc))
+            if PROVIDER_FAILS[name] >= 3:
+                DEAD_PROVIDERS.add(name)
+                log("провайдер %s отключён после серии ошибок" % name)
             continue
         if out and out.strip() and out.strip() != text:
+            PROVIDER_FAILS[name] = 0
             return out.strip(), name
     return None, None
 
@@ -381,6 +418,8 @@ def translate_many(pieces):
         groups.append(cur)
 
     for group in groups:
+        if not translation_available():
+            break
         joined = "\n".join(t for _, t in group)
         out, _ = translate_block(joined)
         if out is None:
@@ -506,7 +545,7 @@ def build_items(raw_items, old_by_gid, manual_translations):
                 item["preview"] = old.get("preview") or strip_tags_preview(old["body"])
                 item["translated"] = True
                 item["translation"] = old.get("translation", "auto")
-            elif translated_now < TRANSLATE_LIMIT:
+            elif translated_now < TRANSLATE_LIMIT and translation_available():
                 translated_now += 1
                 nodes = sanitize_html(raw.get("contents") or "")
                 texts = [

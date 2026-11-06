@@ -309,7 +309,7 @@ def html_text_preview(nodes, limit=260):
 def _google_translate(text: str) -> str:
     url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ru&dt=t"
     body = urllib.parse.urlencode({"q": text}).encode("utf-8")
-    raw = http_get(url, retries=2, data=body)
+    raw = http_get(url, retries=2, timeout=15, data=body)
     data = json.loads(raw.decode("utf-8", "replace"))
     return "".join(seg[0] for seg in data[0] if seg and seg[0])
 
@@ -318,7 +318,7 @@ def _mymemory_translate(text: str) -> str:
     url = "https://api.mymemory.translated.net/get?" + urllib.parse.urlencode(
         {"q": text, "langpair": "en|ru"}
     )
-    data = get_json(url, retries=2)
+    data = get_json(url, retries=2, timeout=15)
     out = (data.get("responseData") or {}).get("translatedText") or ""
     if "MYMEMORY WARNING" in out.upper():
         raise ValueError("mymemory quota")
@@ -329,7 +329,7 @@ def _lingva_translate(text: str) -> str:
     for host in ("lingva.ml", "lingva.pussthecat.org", "lingva.garudalinux.org"):
         try:
             url = "https://%s/api/v1/en/ru/%s" % (host, urllib.parse.quote(text, safe=""))
-            data = get_json(url, retries=1, timeout=25)
+            data = get_json(url, retries=1, timeout=12)
             if data.get("translation"):
                 return data["translation"]
         except Exception:  # noqa: BLE001

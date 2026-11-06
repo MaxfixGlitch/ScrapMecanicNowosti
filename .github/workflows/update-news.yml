@@ -15,13 +15,16 @@ permissions:
   contents: write
 
 concurrency:
-  group: update-news
+  # Группа — по ветке: подвисший прогон в одной ветке не блокирует остальные.
+  group: update-news-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
   update:
     name: Загрузить новости из Steam
     runs-on: ubuntu-latest
+    # Защита от «залипания»: если провайдеры перевода недоступны, не висим часами.
+    timeout-minutes: 25
     steps:
       - name: Клонировать репозиторий
         uses: actions/checkout@v4

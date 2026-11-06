@@ -555,12 +555,6 @@
   $("refreshBtn").addEventListener("click", refreshLive);
   $("refreshLink").addEventListener("click", function (e) { e.preventDefault(); refreshLive(); });
 
-  window.addEventListener("scroll", function () {
-    $("toTop").classList.toggle("show", window.scrollY > 600);
-  });
-  $("toTop").addEventListener("click", function () {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  });
   window.addEventListener("resize", function () {
     Array.prototype.forEach.call(document.querySelectorAll(".post"), measure);
   });

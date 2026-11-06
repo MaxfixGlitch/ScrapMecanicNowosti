@@ -100,6 +100,27 @@ BB_SIMPLE = {
 }
 
 
+# Машинный перевод иногда «переводит» сами теги разметки:
+# [p] -> [п], [/p] -> [/р], [h3] -> [час]. Такие артефакты нужно вырезать.
+MANGLED_TAG_RE = re.compile(r"\[/?[\u0430-\u044f\u0410-\u042f\u0451\u0401]{1,10}\]")
+# Теги с атрибутами, например [p align="start"]
+ATTR_OPEN_RE = re.compile(
+    r"\[(p|h1|h2|h3|h4|li|ul|ol|tr|td|th|c|center|quote|spoiler|b|i|u|s)"
+    r"(?:\s+[^\]]*)?\]", re.I)
+ATTR_CLOSE_RE = re.compile(
+    r"\[/(p|h1|h2|h3|h4|li|ul|ol|tr|td|th|c|center|quote|spoiler|b|i|u|s)\]", re.I)
+
+
+def cleanup_marks(text: str) -> str:
+    """Убирает из текста мусорные теги, оставшиеся после перевода или разметки Steam."""
+    text = MANGLED_TAG_RE.sub("", text)
+    text = ATTR_OPEN_RE.sub(r"<\1>", text)
+    text = ATTR_CLOSE_RE.sub(r"</\1>", text)
+    # Двойные пробелы и пробелы перед знаками препинания — следы вырезанных тегов.
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text
+
+
 def preprocess_bbcode(text: str) -> str:
     """
     Steam отдаёт новости в смешанной разметке: часть — обычный HTML,
@@ -135,9 +156,10 @@ def preprocess_bbcode(text: str) -> str:
     text = re.sub(r"\[/?list\]", lambda m: "<ul>" if "[/" not in m.group(0) else "</ul>", text, flags=re.I)
     text = re.sub(r"\[/?\*\]", lambda m: "<li>" if "[/" not in m.group(0) else "</li>", text, flags=re.I)
 
-    # Простые парные теги
+    # Простые парные теги (в том числе с атрибутами: [p align="start"])
     for bb, tag in BB_SIMPLE.items():
-        text = re.sub(r"\[%s\](.*?)\[/%s\]" % (bb, bb), r"<%s>\1</%s>" % (tag, tag), text, flags=re.I | re.S)
+        text = re.sub(r"\[%s(?:\s+[^\]]*)?\](.*?)\[/%s\]" % (bb, bb),
+                      r"<%s>\1</%s>" % (tag, tag), text, flags=re.I | re.S)
 
     text = re.sub(r"\[hr\]", "<hr />", text, flags=re.I)
 
@@ -147,6 +169,10 @@ def preprocess_bbcode(text: str) -> str:
 
     # Страховка от «висячих» закрывающих тегов, которые никто не открывал.
     text = re.sub(r"\[/[a-z0-9]+\]", "", text, flags=re.I)
+
+    # И напоследок — подчищаем переводческие артефакты вроде [п] и [час].
+    text = MANGLED_TAG_RE.sub("", text)
+    return text
     return text
 
 
@@ -589,6 +615,11 @@ def build_items(raw_items, old_by_gid, manual_translations):
             # Заголовок могли перевести раньше — не теряем его.
             if old.get("translated") and old.get("title") and old.get("title_en") == title_en:
                 item["title"] = old["title"]
+
+        # Подчищаем артефакты машинного перевода в уже сохранённых текстах
+        # (например «переведённые» теги вида [п] или [час]).
+        if item["body"] and item["body"] != item["body_en"]:
+            item["body"] = cleanup_marks(item["body"])
 
         items.append(item)
 

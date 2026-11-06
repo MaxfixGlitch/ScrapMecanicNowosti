@@ -1,0 +1,64 @@
+name: Обновление новостей Scrap Mechanic
+
+on:
+  push:
+    paths:
+      - ".github/workflows/update-news.yml"
+      - "scripts/**"
+      - "data/translations.json"
+  schedule:
+    # каждые 6 часов
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-news
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Загрузить новости из Steam
+    runs-on: ubuntu-latest
+    steps:
+      - name: Клонировать репозиторий
+        uses: actions/checkout@v4
+
+      - name: Настроить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Собрать данные
+        env:
+          SM_APPID: "387990"
+          SM_TRANSLATE_LIMIT: "30"
+        run: python scripts/update_data.py
+
+      - name: Зафиксировать изменения
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config pull.rebase true
+          git add -A data/
+          if git diff --cached --quiet; then
+            echo "Новых данных нет — коммитить нечего."
+            exit 0
+          fi
+          git commit -m "Автообновление новостей Scrap Mechanic [skip ci]"
+          # Пока собирали данные, ветка могла уехать вперёд — аккуратно догоняем.
+          for attempt in 1 2 3 4; do
+            git pull --rebase --autostash origin "$BRANCH" || true
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Данные запушены."
+              exit 0
+            fi
+            echo "Пуш не удался (попытка $attempt), пробуем снова…"
+            sleep $((attempt * 5))
+          done
+          echo "Не получилось запушить данные — оставляем как есть."
+          exit 1

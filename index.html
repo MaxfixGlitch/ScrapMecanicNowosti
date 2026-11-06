@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scrap Mechanic — новости, обновления и патчи</title>
+<meta name="description" content="Новости и последние изменения Scrap Mechanic на русском: патчи, обновления, события и дневники разработчиков. Данные подтягиваются из Steam автоматически.">
+<meta name="theme-color" content="#171a21">
+<meta name="referrer" content="no-referrer">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Scrap Mechanic — новости и обновления">
+<meta property="og:description" content="Все новости и патчи Scrap Mechanic на русском, в оформлении Steam.">
+<link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/css/steam.css">
+</head>
+<body>
+
+<!-- ================================================== Верхняя панель ===== -->
+<header class="global_header">
+  <div class="gh_inner">
+    <a class="logo" href="index.html" title="На главную">
+      <svg class="gear" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .05-.94 7.07 7.07 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.65 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.03.31-.05.62-.05.94s.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg>
+      SCRAP NEWS
+    </a>
+    <small>НОВОСТИ ИГРЫ</small>
+
+    <div class="gh_spacer"></div>
+
+    <div class="gh_menu">
+      <a href="#feed">Лента</a>
+      <a href="#about">Об игре</a>
+      <a href="#" id="refreshLink" title="Запросить свежие новости прямо из Steam">Обновить</a>
+    </div>
+
+    <a class="btn btn_green" id="steamTopBtn" href="https://store.steampowered.com/app/387990/Scrap_Mechanic/" target="_blank" rel="noopener">
+      Открыть в Steam
+    </a>
+  </div>
+</header>
+
+<!-- ====================================================== Навигация ===== -->
+<nav class="store_nav">
+  <div class="sn_inner">
+    <a href="index.html" class="active">Новости</a>
+    <a href="#about">Об игре</a>
+    <a href="https://steamcommunity.com/app/387990/workshop/" target="_blank" rel="noopener">Мастерская</a>
+    <a href="https://steamcommunity.com/app/387990/guides/" target="_blank" rel="noopener">Руководства</a>
+    <a href="https://steamcommunity.com/app/387990/discussions/" target="_blank" rel="noopener">Обсуждения</a>
+    <a href="#screens">Скриншоты</a>
+    <div class="sn_search"></div>
+  </div>
+</nav>
+
+<!-- ========================================================== Шапка ===== -->
+<div class="page_header" id="hero">
+  <div class="ph_inner">
+    <img class="ph_cover" id="heroCover" alt="" hidden>
+    <div class="ph_text">
+      <div class="breadcrumbs">
+        <a href="index.html">Новости</a> <span>/</span> <span id="crumbGame">Scrap Mechanic</span>
+      </div>
+      <h1 class="ph_title" id="heroTitle">Scrap Mechanic</h1>
+      <p class="ph_sub" id="heroSub">Загружаем данные об игре…</p>
+      <div class="ph_meta" id="heroMeta"></div>
+    </div>
+    <div class="ph_actions">
+      <button class="btn btn_blue" id="refreshBtn" type="button">Обновить ленту</button>
+      <a class="btn btn_ghost" id="steamNewsBtn" href="https://store.steampowered.com/news/app/387990" target="_blank" rel="noopener">
+        Оригинал на Steam
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ======================================================== Контент ===== -->
+<main class="page">
+
+  <!-- --------------------------------------------------- Лента новостей -->
+  <section>
+    <div class="filters">
+      <div id="tabs" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+      <div class="search_box">
+        <input id="search" type="search" placeholder="Поиск по новостям…" aria-label="Поиск по новостям">
+      </div>
+    </div>
+
+    <div id="feed" class="feed">
+      <div class="loader"><div class="spinner"></div> Загружаем новости…</div>
+    </div>
+
+    <div id="screens" class="panel" style="margin-top:18px" hidden>
+      <div class="panel_head">Скриншоты игры</div>
+      <div class="panel_body" id="screensBox" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px"></div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- Сайдбар -->
+  <aside class="side">
+
+    <div class="panel about_game" id="about">
+      <div class="panel_head">Об игре</div>
+      <img class="cover" id="sideCover" alt="" hidden>
+      <div class="desc" id="sideDesc">Загрузка…</div>
+      <div class="kv" id="gameKv"></div>
+      <div class="stat_online" id="onlineBox" hidden>
+        <span class="live"></span>
+        <b id="onlineNum">—</b>
+        <span>игроков сейчас</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel_head">Последние обновления</div>
+      <ul class="recent_list" id="recent"></ul>
+    </div>
+
+    <div class="panel">
+      <div class="panel_head">Рубрики</div>
+      <div class="tag_cloud" id="tagCloud"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel_head">Ссылки</div>
+      <ul class="link_list">
+        <li><a href="https://store.steampowered.com/app/387990/Scrap_Mechanic/" target="_blank" rel="noopener">Страница в Steam <span class="arrow">↗</span></a></li>
+        <li><a href="https://steamcommunity.com/app/387990/discussions/" target="_blank" rel="noopener">Обсуждения <span class="arrow">↗</span></a></li>
+        <li><a href="https://steamcommunity.com/app/387990/workshop/" target="_blank" rel="noopener">Мастерская <span class="arrow">↗</span></a></li>
+        <li><a href="https://steamcommunity.com/app/387990/guides/" target="_blank" rel="noopener">Руководства <span class="arrow">↗</span></a></li>
+        <li><a href="https://www.scrapmechanic.com/" target="_blank" rel="noopener">Сайт разработчика <span class="arrow">↗</span></a></li>
+      </ul>
+    </div>
+
+  </aside>
+</main>
+
+<!-- ========================================================== Футер ===== -->
+<footer class="site_footer">
+  <div class="sf_inner">
+    <div class="sf_logo">
+      <svg class="gear" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .05-.94 7.07 7.07 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.65 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.03.31-.05.62-.05.94s.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58ZM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2Z"/></svg>
+      SCRAP NEWS
+    </div>
+    <div class="sf_text">
+      Неофициальный фанатский новостной сайт об игре <strong>Scrap Mechanic</strong>.
+      Новости загружаются автоматически из Steam (Steam Web API) и переводятся на русский язык.
+      Материалы принадлежат Axolot Games и Valve Corporation.
+    </div>
+    <div class="sf_links">
+      <a href="https://store.steampowered.com/app/387990/Scrap_Mechanic/" target="_blank" rel="noopener">Steam</a>
+      <a href="https://www.scrapmechanic.com/" target="_blank" rel="noopener">Scrap Mechanic</a>
+      <a href="https://github.com/MaxfixGlitch/ScrapMecanicNowosti" target="_blank" rel="noopener">Исходники на GitHub</a>
+      <a href="data/news.json" target="_blank" rel="noopener">news.json</a>
+    </div>
+    <div class="sf_note">
+      Сайт не связан с Axolot Games и Valve Corporation. Оформление выполнено в стиле Steam
+      исключительно в ознакомительных целях.<br>
+      <span id="updatedAt"></span>
+    </div>
+  </div>
+</footer>
+
+<button class="to_top" id="toTop" type="button" title="Наверх">↑</button>
+<div class="toast" id="toast"></div>
+
+<script src="assets/js/app.js"></script>
+</body>
+</html>

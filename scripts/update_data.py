@@ -90,21 +90,62 @@ def get_json(url, **kw):
 # ------------------------------------------------------------------- bbcode -> html
 
 
+BB_SIMPLE = {
+    "b": "b", "i": "i", "u": "u", "s": "s",
+    "h1": "h1", "h2": "h2", "h3": "h3", "h4": "h4",
+    "quote": "blockquote", "spoiler": "blockquote",
+    "center": "center", "c": "code", "p": "p",
+    "table": "table", "tr": "tr", "td": "td", "th": "th",
+}
+
+
 def preprocess_bbcode(text: str) -> str:
-    """Steam иногда отдаёт новости в bbcode-подобном виде. Приводим к HTML."""
-    if "{STEAM_CLAN_IMAGE}" not in text and "[/" not in text:
+    """
+    Steam отдаёт новости в смешанной разметке: часть — обычный HTML,
+    часть — bbcode-подобные теги вида [p], [c], [img src="..."], [/*].
+    Приводим всё к единому HTML.
+    """
+    if "[" not in text:
         return text
 
+    # Картинки кланов Steam: {STEAM_CLAN_IMAGE}/123/abc.png
+    text = text.replace("{STEAM_CLAN_IMAGE}/", CLAN_IMAGE_BASE)
     text = text.replace("{STEAM_CLAN_IMAGE}", CLAN_IMAGE_BASE)
+
+    # [img src="..."] и [img]...[/img]
+    text = re.sub(r'\[img\s+src=(["\'])(.*?)\1\s*/?\]', r'<img src="\2" />', text, flags=re.I | re.S)
+    text = re.sub(r"\[img\s+src=([^\]\s]+)\s*/?\]", r'<img src="\1" />', text, flags=re.I)
     text = re.sub(r"\[img\](.*?)\[/img\]", r'<img src="\1" />', text, flags=re.I | re.S)
-    text = re.sub(r"\[url=(.*?)\](.*?)\[/url\]", r'<a href="\1">\2</a>', text, flags=re.I | re.S)
+
+    # Ссылки
+    text = re.sub(r'\[url=(["\']?)(.*?)\1\](.*?)\[/url\]', r'<a href="\2">\3</a>', text, flags=re.I | re.S)
     text = re.sub(r"\[url\](.*?)\[/url\]", r'<a href="\1">\1</a>', text, flags=re.I | re.S)
-    for tag in ("b", "i", "u", "s", "h1", "h2", "h3", "quote"):
-        text = re.sub(r"\[%s\](.*?)\[/%s\]" % (tag, tag), r"<%s>\1</%s>" % (tag, tag), text, flags=re.I | re.S)
-    text = re.sub(r"\[list\]", "<ul>", text, flags=re.I)
-    text = re.sub(r"\[/list\]", "</ul>", text, flags=re.I)
-    text = re.sub(r"\[\*\]\s*", "<li>", text, flags=re.I)
-    text = text.replace("\n", "<br />")
+
+    # Видео
+    text = re.sub(
+        r"\[previewyoutube=([^;\]]+)[^\]]*\](.*?)\[/previewyoutube\]",
+        lambda m: '<a href="https://www.youtube.com/watch?v=%s">Смотреть видео на YouTube</a>' % m.group(1),
+        text,
+        flags=re.I | re.S,
+    )
+
+    # Списки: [list] -> <ul>, [*] -> <li>, [/*] -> </li>
+    text = re.sub(r"\[/?olist\]", lambda m: "<ol>" if "[/" not in m.group(0) else "</ol>", text, flags=re.I)
+    text = re.sub(r"\[/?list\]", lambda m: "<ul>" if "[/" not in m.group(0) else "</ul>", text, flags=re.I)
+    text = re.sub(r"\[/?\*\]", lambda m: "<li>" if "[/" not in m.group(0) else "</li>", text, flags=re.I)
+
+    # Простые парные теги
+    for bb, tag in BB_SIMPLE.items():
+        text = re.sub(r"\[%s\](.*?)\[/%s\]" % (bb, bb), r"<%s>\1</%s>" % (tag, tag), text, flags=re.I | re.S)
+
+    text = re.sub(r"\[hr\]", "<hr />", text, flags=re.I)
+
+    # Если блоковых тегов нет вообще — сохраняем переносы строк.
+    if not re.search(r"<?\[?(p|ul|ol|li|h[1-4]|div)>?\]?", text, flags=re.I):
+        text = text.replace("\n", "<br />")
+
+    # Страховка от «висячих» закрывающих тегов, которые никто не открывал.
+    text = re.sub(r"\[/[a-z0-9]+\]", "", text, flags=re.I)
     return text
 
 
@@ -208,10 +249,45 @@ def serialize(nodes):
     return "".join(parts)
 
 
+URL_RE = re.compile(r"^https?://\S+$")
+
+
+def postprocess_nodes(nodes):
+    """Убирает ссылки без адреса и картинки без src, чтобы на сайте не было пустышек."""
+    out = []
+    stack = []  # позиции открывающих <a> в out
+    for n in nodes:
+        if n["type"] == "start" and n["tag"] == "a":
+            stack.append((len(out), n))
+            out.append(n)
+            continue
+        if n["type"] == "end" and n["tag"] == "a" and stack:
+            pos, start = stack.pop()
+            href = start["attrs"].get("href", "")
+            if not href:
+                inner = "".join(
+                    o["text"] for o in out[pos + 1:] if o["type"] == "text"
+                ).strip()
+                if URL_RE.match(inner):
+                    start["attrs"]["href"] = inner
+                else:
+                    # Ссылка никуда не ведёт — просто убираем тег, текст остаётся.
+                    out[pos] = {"type": "drop"}
+                    out.append({"type": "drop"})
+                    continue
+            out.append(n)
+            continue
+        if n["type"] == "void" and n["tag"] == "img" and not n["attrs"].get("src"):
+            continue
+        out.append(n)
+
+    return [n for n in out if n["type"] != "drop"]
+
+
 def sanitize_html(raw: str) -> list:
     p = Sanitizer()
     p.feed(preprocess_bbcode(raw or ""))
-    return p.result()
+    return postprocess_nodes(p.result())
 
 
 def html_text_preview(nodes, limit=260):

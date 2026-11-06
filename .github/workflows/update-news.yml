@@ -34,7 +34,7 @@ jobs:
       - name: Собрать данные
         env:
           SM_APPID: "387990"
-          SM_TRANSLATE_LIMIT: "12"
+          SM_TRANSLATE_LIMIT: "30"
         run: python scripts/update_data.py
 
       - name: Зафиксировать изменения

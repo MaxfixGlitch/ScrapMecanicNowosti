@@ -89,6 +89,26 @@
     PRE: 1, CODE: 1, CENTER: 1, SMALL: 1, SUP: 1, SUB: 1
   };
 
+  function youtubeBlock(vid) {
+    return '<a class="yt" href="https://www.youtube.com/watch?v=' + vid + '"' +
+      ' target="_blank" rel="noopener noreferrer" aria-label="Смотреть видео на YouTube">' +
+      '<img src="https://img.youtube.com/vi/' + vid + '/hqdefault.jpg" alt="" loading="lazy" />' +
+      '<span class="yt_play"></span></a>';
+  }
+
+  function upgradeYouTube(htmlText) {
+    return (htmlText || "")
+      // Ссылка с пустым id — из оригинала, она никуда не ведёт: убираем её.
+      .replace(
+        /<a[^>]*href="https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)"[^>]*>\s*Смотреть видео на YouTube\s*<\/a>/gi,
+        ""
+      )
+      .replace(
+      /<a[^>]*href="https?:\/\/(?:www\.)?(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_\-]{6,})[^"]*"[^>]*>\s*Смотреть видео на YouTube\s*<\/a>/gi,
+      function (m, vid) { return youtubeBlock(vid); }
+    );
+  }
+
   function preprocessBB(text) {
     if (text.indexOf("[") === -1) return text;
     var base = "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans/";
@@ -99,7 +119,7 @@
     text = text.replace(/\[url=(["']?)(.*?)\1\]([\s\S]*?)\[\/url\]/gi, '<a href="$2">$3</a>');
     text = text.replace(/\[url\]([\s\S]*?)\[\/url\]/gi, '<a href="$1">$1</a>');
     text = text.replace(/\[previewyoutube=([^;\]]+)[^\]]*\][\s\S]*?\[\/previewyoutube\]/gi,
-      '<a href="https://www.youtube.com/watch?v=$1">Смотреть видео на YouTube</a>');
+      function (m, vid) { return vid.trim() ? youtubeBlock(vid.trim()) : ""; });
     text = text.replace(/\[\/olist\]/gi, "</ol>").replace(/\[olist\]/gi, "<ol>");
     text = text.replace(/\[\/list\]/gi, "</ul>").replace(/\[list\]/gi, "<ul>");
     text = text.replace(/\[\/\*\]/gi, "</li>").replace(/\[\*\]/gi, "<li>");
@@ -131,8 +151,9 @@
           }
           for (i = child.attributes.length - 1; i >= 0; i--) {
             var a = child.attributes[i];
-            var keep = (child.tagName === "A" && (a.name === "href" || a.name === "title")) ||
-                       (child.tagName === "IMG" && (a.name === "src" || a.name === "alt"));
+            var keep = (child.tagName === "A" && (a.name === "href" || a.name === "title" || a.name === "class")) ||
+                       (child.tagName === "IMG" && (a.name === "src" || a.name === "alt")) ||
+                       (child.tagName === "SPAN" && a.name === "class");
             if (!keep) child.removeAttribute(a.name);
           }
           if (child.tagName === "A") {
@@ -167,7 +188,7 @@
       }
     })(host);
 
-    return host.innerHTML;
+    return upgradeYouTube(host.innerHTML);
   }
 
   /* ---------------------------------------------------------- классификация */

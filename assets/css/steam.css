@@ -508,6 +508,59 @@ img { border: 0; }
 }
 .post_body p { margin: 8px 0; }
 
+/* -------------------------------------------------- Превью видео YouTube --- */
+.yt {
+  display: block;
+  position: relative;
+  max-width: 460px;
+  margin: 14px 0;
+  border-radius: 3px;
+  overflow: hidden;
+  line-height: 0;
+  background: #000;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .6), 0 4px 14px rgba(0, 0, 0, .45);
+}
+.yt img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;          /* срезаем чёрные полосы миниатюры hqdefault */
+  margin: 0;
+  border-radius: 0;
+  transition: transform .3s ease;
+}
+.yt:hover img { transform: scale(1.04); }
+
+.yt_play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  height: 48px;
+  background: #ff0000;
+  border-radius: 13px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .55);
+  transition: background .15s ease, transform .15s ease;
+  pointer-events: none;
+}
+.yt:hover .yt_play {
+  background: #ff1f1f;
+  transform: translate(-50%, -50%) scale(1.06);
+}
+.yt_play::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-42%, -50%);
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 11px 0 11px 18px;
+  border-color: transparent transparent transparent #fff;
+}
+
 .post_footer {
   padding: 10px 18px 14px;
   display: flex;

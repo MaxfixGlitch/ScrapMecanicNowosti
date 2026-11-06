@@ -26,6 +26,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from html.parser import HTMLParser
 
@@ -399,9 +400,16 @@ def translate_block(text: str):
     return None, None
 
 
+def _translate_one(args):
+    idx, text = args
+    out, _ = translate_block(text)
+    return idx, out
+
+
 def translate_many(pieces):
     """Переводит список строк, сохраняя порядок и количество. None для неудачных."""
     result = [None] * len(pieces)
+
     # Склеиваем короткие куски, чтобы уменьшить число запросов.
     groups, cur, cur_len = [], [], 0
     for i, piece in enumerate(pieces):
@@ -417,26 +425,29 @@ def translate_many(pieces):
     if cur:
         groups.append(cur)
 
+    # Сначала одним запросом на группу — это на порядок быстрее.
+    pending = []
     for group in groups:
         if not translation_available():
             break
         joined = "\n".join(t for _, t in group)
         out, _ = translate_block(joined)
-        if out is None:
-            # Пробуем перевести каждый кусок по отдельности.
-            for i, text in group:
-                one, _ = translate_block(text)
-                result[i] = one
-            continue
-        lines = out.split("\n")
-        if len(lines) == len(group):
-            for (i, _), line in zip(group, lines):
-                result[i] = line.strip()
-        else:
-            for i, text in group:
-                one, _ = translate_block(text)
-                result[i] = one
-        time.sleep(0.15)
+        if out is not None:
+            lines = out.split("\n")
+            if len(lines) == len(group):
+                for (i, _), line in zip(group, lines):
+                    result[i] = line.strip()
+                continue
+        pending.extend(group)
+        time.sleep(0.12)
+
+    # Что не удалось склеить — переводим по одному, но параллельно.
+    if pending and translation_available():
+        workers = int(os.environ.get("SM_TRANSLATE_WORKERS", "4"))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            for idx, out in pool.map(_translate_one, pending):
+                result[idx] = out
+
     return result
 
 

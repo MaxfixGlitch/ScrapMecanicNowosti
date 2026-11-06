@@ -337,7 +337,9 @@
     var body = post.querySelector(".post_body");
     var btn = post.querySelector(".btn_more");
     if (!body || !btn) return;
-    var tall = body.scrollHeight > 560;
+    // Почти все новости Steam содержат картинки, а они подгружаются лениво —
+    // поэтому считаем такой пост «длинным» заранее, до загрузки изображений.
+    var tall = body.scrollHeight > 560 || body.querySelectorAll("img").length > 0;
     body.classList.toggle("collapsed", tall && !post.dataset.open);
     btn.style.display = tall ? "" : "none";
     btn.textContent = (post.dataset.open || !tall) ? "Свернуть" : "Читать далее";

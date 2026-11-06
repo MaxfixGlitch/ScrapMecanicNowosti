@@ -541,45 +541,55 @@ def build_items(raw_items, old_by_gid, manual_translations):
             "source": "steam",
         }
 
-        manual = manual_translations.get(gid)
-        if manual and manual.get("title") and manual.get("body"):
-            item["title"] = manual["title"]
+        manual = manual_translations.get(gid) or {}
+        old = old_by_gid.get(gid)
+        # Ранее переведённый текст можно переиспользовать, если оригинал не менялся.
+        reused = bool(old and old.get("translated") and old.get("body")
+                      and old.get("body_en") == body_en)
+
+        if manual.get("body"):
+            # Ручной перевод тела — самый приоритетный вариант.
             item["body"] = manual["body"]
             item["preview"] = manual.get("preview") or strip_tags_preview(manual["body"])
             item["translated"] = True
             item["translation"] = "manual"
-        else:
-            old = old_by_gid.get(gid)
-            if old and old.get("translated") and old.get("body") and old.get("body_en") == body_en:
+        elif reused:
+            item["body"] = old["body"]
+            item["preview"] = old.get("preview") or ""
+            item["translated"] = True
+            item["translation"] = old.get("translation", "auto")
+        elif translated_now < TRANSLATE_LIMIT and translation_available():
+            translated_now += 1
+            nodes = sanitize_html(raw.get("contents") or "")
+            texts = [
+                n["text"]
+                for n in nodes
+                if n["type"] == "text" and n["text"].strip()
+            ]
+            title_ru, _ = translate_block(title_en)
+            body_ru_parts = translate_many(texts)
+            if title_ru or any(body_ru_parts):
+                idx = 0
+                for n in nodes:
+                    if n["type"] == "text" and n["text"].strip():
+                        tr = body_ru_parts[idx] if idx < len(body_ru_parts) else None
+                        if tr:
+                            n["text"] = tr
+                        idx += 1
+                item["body"] = serialize(nodes)
+                item["preview"] = html_text_preview(nodes)
+                item["translated"] = bool(title_ru)
+                item["translation"] = "auto"
+            log("переведён пост", gid, "->", item["translated"])
+
+        if manual.get("title"):
+            # Ручной заголовок применим даже если тело осталось на английском.
+            item["title"] = manual["title"]
+        elif not manual and not reused and item["title"] == title_en and old:
+            # Заголовок могли перевести раньше — не теряем его.
+            if old.get("translated") and old.get("title") and old.get("title_en") == title_en:
                 item["title"] = old["title"]
-                item["body"] = old["body"]
-                item["preview"] = old.get("preview") or strip_tags_preview(old["body"])
-                item["translated"] = True
-                item["translation"] = old.get("translation", "auto")
-            elif translated_now < TRANSLATE_LIMIT and translation_available():
-                translated_now += 1
-                nodes = sanitize_html(raw.get("contents") or "")
-                texts = [
-                    n["text"]
-                    for n in nodes
-                    if n["type"] == "text" and n["text"].strip()
-                ]
-                title_ru, _ = translate_block(title_en)
-                body_ru_parts = translate_many(texts)
-                if title_ru or any(body_ru_parts):
-                    idx = 0
-                    for n in nodes:
-                        if n["type"] == "text" and n["text"].strip():
-                            tr = body_ru_parts[idx] if idx < len(body_ru_parts) else None
-                            if tr:
-                                n["text"] = tr
-                            idx += 1
-                    item["title"] = title_ru or title_en
-                    item["body"] = serialize(nodes)
-                    item["preview"] = html_text_preview(nodes)
-                    item["translated"] = bool(title_ru)
-                    item["translation"] = "auto"
-                log("переведён пост", gid, "->", item["translated"])
+
         items.append(item)
 
     # Старые записи, которых уже нет в выдаче Steam, остаются в архиве.

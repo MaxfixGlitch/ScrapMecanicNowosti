@@ -40,6 +40,7 @@ DATA_DIR = os.path.join(ROOT, "data")
 NEWS_PATH = os.path.join(DATA_DIR, "news.json")
 GAME_PATH = os.path.join(DATA_DIR, "game.json")
 TRANSLATIONS_PATH = os.path.join(DATA_DIR, "translations.json")
+GAME_OVERRIDES_PATH = os.path.join(DATA_DIR, "game-overrides.json")
 
 UA = "Mozilla/5.0 (compatible; ScrapMecanicNowosti/1.0; +https://github.com)"
 CLAN_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans/"
@@ -121,6 +122,39 @@ def cleanup_marks(text: str) -> str:
     return text
 
 
+def youtube_block(vid: str) -> str:
+    """Превью видео: миниатюра YouTube + красная кнопка воспроизведения."""
+    return (
+        '<a class="yt" href="https://www.youtube.com/watch?v=%s" target="_blank" '
+        'rel="noopener noreferrer" aria-label="Смотреть видео на YouTube">'
+        '<img src="https://img.youtube.com/vi/%s/hqdefault.jpg" alt="" loading="lazy" />'
+        '<span class="yt_play"></span></a>' % (vid, vid)
+    )
+
+
+# Ссылка-заглушка, которую скрипт создавал раньше (и которую мог оставить перевод).
+YT_MARKER_RE = re.compile(
+    r'<a[^>]*href="https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)'
+    r'([A-Za-z0-9_\-]{6,})[^"]*"[^>]*>\s*Смотреть видео на YouTube\s*</a>',
+    re.I | re.S,
+)
+
+
+# Иногда Steam отдаёт тег видео с пустым id — ссылка всё равно никуда не ведёт.
+YT_EMPTY_RE = re.compile(
+    r'<a[^>]*href="https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)"[^>]*>'
+    r'\s*Смотреть видео на YouTube\s*</a>',
+    re.I | re.S,
+)
+
+
+def upgrade_youtube(html_text: str) -> str:
+    """Текстовые ссылки на видео превращаем в превью с кнопкой воспроизведения."""
+    text = html_text or ""
+    text = YT_EMPTY_RE.sub("", text)
+    return YT_MARKER_RE.sub(lambda m: youtube_block(m.group(1)), text)
+
+
 def preprocess_bbcode(text: str) -> str:
     """
     Steam отдаёт новости в смешанной разметке: часть — обычный HTML,
@@ -146,7 +180,7 @@ def preprocess_bbcode(text: str) -> str:
     # Видео
     text = re.sub(
         r"\[previewyoutube=([^;\]]+)[^\]]*\](.*?)\[/previewyoutube\]",
-        lambda m: '<a href="https://www.youtube.com/watch?v=%s">Смотреть видео на YouTube</a>' % m.group(1),
+        lambda m: youtube_block(m.group(1)) if m.group(1).strip() else "",
         text,
         flags=re.I | re.S,
     )
@@ -186,8 +220,9 @@ ALLOWED_TAGS = {
 }
 VOID_TAGS = {"br", "hr", "img"}
 ALLOWED_ATTRS = {
-    "a": {"href", "title"},
+    "a": {"href", "title", "class"},
     "img": {"src", "alt", "title", "width", "height"},
+    "span": {"class"},
 }
 
 
@@ -618,8 +653,8 @@ def build_items(raw_items, old_by_gid, manual_translations):
 
         # Подчищаем артефакты машинного перевода в уже сохранённых текстах
         # (например «переведённые» теги вида [п] или [час]).
-        if item["body"] and item["body"] != item["body_en"]:
-            item["body"] = cleanup_marks(item["body"])
+        if item["body"]:
+            item["body"] = upgrade_youtube(cleanup_marks(item["body"]))
 
         items.append(item)
 
@@ -665,6 +700,13 @@ def main():
     try:
         g = fetch_game()
         players = fetch_players()
+        overrides = load_json(GAME_OVERRIDES_PATH, {})
+        # Steam не локализует описание Scrap Mechanic — берём ручной перевод,
+        # а если его нет — пробуем перевести автоматически.
+        short_ru = overrides.get("short_description")
+        if not short_ru and translation_available():
+            short_ru, _ = translate_block(g.get("short_description") or "")
+        about_ru = overrides.get("about") or g.get("about_the_game")
         movies = [
             {"id": m.get("id"), "name": m.get("name"), "thumb": m.get("thumbnail")}
             for m in (g.get("movies") or [])[:6]
@@ -674,8 +716,8 @@ def main():
             "appid": APPID,
             "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "name": g.get("name"),
-            "short_description": g.get("short_description"),
-            "about": g.get("about_the_game"),
+            "short_description": short_ru or g.get("short_description"),
+            "about": about_ru,
             "detailed_description": g.get("detailed_description"),
             "header_image": g.get("header_image"),
             "capsule_image": g.get("capsule_imagev5") or g.get("capsule_image"),

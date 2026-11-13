@@ -628,6 +628,9 @@ def build_items(raw_items, old_by_gid, manual_translations):
                 if n["type"] == "text" and n["text"].strip()
             ]
             title_ru, _ = translate_block(title_en)
+            if title_ru:
+                # Иначе новый пост остаётся с английским заголовком.
+                item["title"] = title_ru
             body_ru_parts = translate_many(texts)
             if title_ru or any(body_ru_parts):
                 idx = 0

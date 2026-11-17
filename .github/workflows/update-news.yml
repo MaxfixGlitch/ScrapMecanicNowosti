@@ -41,6 +41,9 @@ jobs:
         run: python scripts/update_data.py
 
       - name: Зафиксировать изменения
+        # Выполняется и при ошибке сбора данных, чтобы в репозитории остался
+        # data/status.json с причиной сбоя.
+        if: always()
         env:
           BRANCH: ${{ github.ref_name }}
         run: |

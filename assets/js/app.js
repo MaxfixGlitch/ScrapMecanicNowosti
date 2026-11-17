@@ -31,7 +31,10 @@
   }
 
   function getJSON(url) {
-    return fetch(url, { cache: "no-store" }).then(function (r) {
+    // «?t=…» — защита от кэша: и браузер, и GitHub Pages любят отдавать
+    // старую версию файла, из-за чего свежие новости не видны.
+    var sep = url.indexOf("?") === -1 ? "?" : "&";
+    return fetch(url + sep + "t=" + Date.now(), { cache: "no-store" }).then(function (r) {
       if (!r.ok) throw new Error(url + " → " + r.status);
       return r.json();
     });

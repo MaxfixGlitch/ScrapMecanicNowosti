@@ -41,6 +41,7 @@ NEWS_PATH = os.path.join(DATA_DIR, "news.json")
 GAME_PATH = os.path.join(DATA_DIR, "game.json")
 TRANSLATIONS_PATH = os.path.join(DATA_DIR, "translations.json")
 GAME_OVERRIDES_PATH = os.path.join(DATA_DIR, "game-overrides.json")
+STATUS_PATH = os.path.join(DATA_DIR, "status.json")
 
 UA = "Mozilla/5.0 (compatible; ScrapMecanicNowosti/1.0; +https://github.com)"
 CLAN_IMAGE_BASE = "https://cdn.cloudflare.steamstatic.com/steamcommunity/public/images/clans/"
@@ -544,14 +545,33 @@ def classify(title: str) -> str:
 
 
 def fetch_news():
-    url = (
+    """
+    Забираем новости из Steam. Если сам Steam недоступен (лимит по IP, блокировка),
+    пробуем публичные прокси — иначе обновления встанут, а мы этого не заметим.
+    """
+    api = (
         "https://api.steampowered.com/ISteamNews/GetNewsForApp/v0002/"
         "?appid=%d&count=60&format=json" % APPID
     )
-    data = get_json(url)
-    items = (data.get("appnews") or {}).get("newsitems") or []
-    log("получено новостей из Steam:", len(items))
-    return items
+    enc = urllib.parse.quote(api, safe="")
+    sources = [
+        api,
+        "https://api.allorigins.win/raw?url=" + enc,
+        "https://api.codetabs.com/v1/proxy?quest=" + enc,
+    ]
+    last = None
+    for url in sources:
+        try:
+            data = get_json(url, retries=2, timeout=35)
+            items = (data.get("appnews") or {}).get("newsitems") or []
+            if items:
+                log("новости получены от", url.split("/")[2], "— записей:", len(items))
+                return items
+            last = ValueError("пустой ответ от %s" % url.split("/")[2])
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            log("источник не сработал:", url.split("/")[2], exc)
+    raise last
 
 
 def fetch_game():
@@ -646,13 +666,18 @@ def build_items(raw_items, old_by_gid, manual_translations):
                 item["translation"] = "auto"
             log("переведён пост", gid, "->", item["translated"])
 
+        # Заголовок: ручной перевод > ранее переведённый > свежий авто-перевод.
+        # Важно: этот блок должен работать и для записей с уже переведённым текстом
+        # (reused), иначе заголовок, однажды оставшись английским, таким и останется.
         if manual.get("title"):
-            # Ручной заголовок применим даже если тело осталось на английском.
             item["title"] = manual["title"]
-        elif not manual and not reused and item["title"] == title_en and old:
-            # Заголовок могли перевести раньше — не теряем его.
-            if old.get("translated") and old.get("title") and old.get("title_en") == title_en:
-                item["title"] = old["title"]
+        elif old and old.get("title") and old["title"] != title_en and old.get("title_en") == title_en:
+            item["title"] = old["title"]          # уже переводили раньше — не теряем
+        elif item["title"] == title_en and translation_available():
+            # Заголовок всё ещё английский (например, перевод сорвался в прошлый раз).
+            title_ru, _ = translate_block(title_en)
+            if title_ru:
+                item["title"] = title_ru
 
         # Подчищаем артефакты машинного перевода в уже сохранённых текстах
         # (например «переведённые» теги вида [п] или [час]).
@@ -684,6 +709,7 @@ def main():
     manual = load_json(TRANSLATIONS_PATH, {}).get("items", {})
 
     # ---------------------------------------------------------------- новости
+    news_error = None
     try:
         items = build_items(fetch_news(), old_by_gid, manual)
         save_json(
@@ -696,8 +722,23 @@ def main():
             },
         )
         log("news.json обновлён, записей:", len(items))
+        # Всё получилось — убираем файл о прошлой ошибке.
+        if os.path.exists(STATUS_PATH):
+            os.remove(STATUS_PATH)
     except Exception as exc:  # noqa: BLE001
+        news_error = exc
         log("ОШИБКА новостей (оставляю старые данные):", exc)
+        # Записываем причину в репозиторий: логи Actions читать неоткуда,
+        # а файл видно — по нему понятно, почему обновление встало.
+        save_json(STATUS_PATH, {
+            "ok": False,
+            "checked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "appid": APPID,
+            "error_type": type(exc).__name__,
+            "error": str(exc)[:500],
+            "archive_items": len(old_by_gid),
+            "last_good_update": old_news.get("updated_at"),
+        })
 
     # ------------------------------------------------------------------- игра
     try:
@@ -746,7 +787,9 @@ def main():
     except Exception as exc:  # noqa: BLE001
         log("ОШИБКА данных об игре (оставляю старые):", exc)
 
-    return 0
+    # Ненулевой код — чтобы прогон стал красным и проблему было видно,
+    # а не «успешно, но данные недельной давности».
+    return 1 if news_error else 0
 
 
 if __name__ == "__main__":

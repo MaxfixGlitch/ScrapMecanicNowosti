@@ -1,0 +1,3 @@
+# CMD must keep literal CRLF bytes, including in GitHub source archives.
+# -text prevents Git from storing LF-only batch files; diff keeps reviews readable.
+integrations/vk/*.cmd -text diff whitespace=cr-at-eol

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "scrapmehi-news",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "vars": {
+    "VK_GROUP": "scrapmehi"
+  },
+  "triggers": {
+    "crons": ["43 * * * *"]
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "PUBLISHER", "class_name": "NewsPublisher" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["NewsPublisher"] }]
+}
